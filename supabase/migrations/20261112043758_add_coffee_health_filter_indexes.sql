@@ -1,14 +1,14 @@
--- Índices para los filtros de la tabla, elegidos midiendo con EXPLAIN ANALYZE sobre 1M filas.
+-- Indexes for the table filters, chosen by measuring with EXPLAIN ANALYZE over 1M rows.
 --
--- Solo country y age: con RLS activo (rol anon, el de PostgREST) el planner usa estadísticas
--- únicamente con operadores leakproof. texteq e int2ge lo son; enum_eq y numeric_ge no, así que
--- para columnas enum y numeric el planner estima con selectividad por defecto y no elige sus
--- índices (probado: índices en esas columnas quedaron con idx_scan = 0).
+-- Only country and age: with RLS enabled (the anon role, PostgREST's) the planner uses
+-- statistics only with leakproof operators. texteq and int2ge are; enum_eq and numeric_ge are
+-- not, so for enum and numeric columns the planner estimates with default selectivity and never
+-- picks their indexes (tested: indexes on those columns stayed at idx_scan = 0).
 --
--- Medido a 1M filas: count por país ~45 ms -> ~7 ms (index-only scan); edad rara + país
--- ~43 ms -> ~6 ms (BitmapAnd). La paginación sin filtros o con filtros comunes ya usa el PK.
+-- Measured at 1M rows: count per country ~45 ms -> ~7 ms (index-only scan); rare age + country
+-- ~43 ms -> ~6 ms (BitmapAnd). Pagination without filters or with common filters already uses the PK.
 --
--- ponytail: CREATE INDEX normal bloquea escrituras mientras se construye. Con la tabla grande en
--- producción, crearlos con CONCURRENTLY fuera de una transacción.
+-- ponytail: a plain CREATE INDEX blocks writes while it builds. With a large production table,
+-- create them with CONCURRENTLY outside a transaction.
 create index coffee_health_country_idx on public.coffee_health (country);
 create index coffee_health_age_idx on public.coffee_health (age);

@@ -15,11 +15,11 @@ import {
 import { MultiSelect } from "./multi-select";
 
 /**
- * Formulario GET: los filtros quedan en la URL y el servidor filtra en Postgres.
- * next/form navega en el cliente sin recargar. No incluye `after`/`before`, así que
- * cambiar filtros vuelve a la primera página.
- * ponytail: los inputs vacíos viajan como `age_min=` en la URL; el parser los ignora.
- * Limpiarlos exigiría un componente cliente.
+ * GET form: filters end up in the URL and the server filters in Postgres.
+ * next/form navigates on the client without a reload. It has no `after`/`before`, so
+ * changing filters goes back to the first page.
+ * ponytail: empty inputs travel as `age_min=` in the URL; the parser ignores them.
+ * Stripping them would need a client component.
  */
 export function CoffeeFilters({ filters, countries }: { filters: Filters; countries: string[] }) {
   return (

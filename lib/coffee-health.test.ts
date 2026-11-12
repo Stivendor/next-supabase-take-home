@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseSearchParams, toHref, toSearchParams } from "./coffee-health";
 
 describe("parseSearchParams", () => {
-  it("lee selección múltiple, rangos y cursor", () => {
+  it("reads multi-select, ranges and cursor", () => {
     const { filters, cursor } = parseSearchParams({
       country: ["Japan", "South Korea"],
       stress_level: "High",
@@ -18,12 +18,12 @@ describe("parseSearchParams", () => {
     expect(cursor).toEqual({ after: 150 });
   });
 
-  it("descarta valores inválidos", () => {
+  it("drops invalid values", () => {
     const { filters, cursor } = parseSearchParams({
       gender: ["Male", "Robot"],
-      sleep_quality: "good", // los enums distinguen mayúsculas
-      age_min: "veinte",
-      age_max: "", // inputs vacíos del formulario
+      sleep_quality: "good", // enums are case-sensitive
+      age_min: "twenty",
+      age_max: "", // empty form inputs
       coffee_intake_min: "Infinity",
       after: "-3",
       before: "1.5",
@@ -35,18 +35,18 @@ describe("parseSearchParams", () => {
     expect(cursor).toBeNull();
   });
 
-  it("acepta 0 como límite de rango", () => {
+  it("accepts 0 as a range bound", () => {
     expect(parseSearchParams({ coffee_intake_min: "0" }).filters.coffee_intake.min).toBe(0);
   });
 
-  it("prefiere after si llegan ambos cursores", () => {
+  it("prefers after when both cursors are present", () => {
     expect(parseSearchParams({ after: "10", before: "5" }).cursor).toEqual({ after: 10 });
     expect(parseSearchParams({ before: "5" }).cursor).toEqual({ before: 5 });
   });
 });
 
 describe("toSearchParams / toHref", () => {
-  it("ida y vuelta conserva los filtros", () => {
+  it("round trip keeps the filters", () => {
     const sp = {
       country: ["Japan", "Spain"],
       gender: "Female",
@@ -63,7 +63,7 @@ describe("toSearchParams / toHref", () => {
     expect(roundTrip.filters).toEqual(filters);
   });
 
-  it("omite vacíos y agrega el cursor", () => {
+  it("omits empty values and appends the cursor", () => {
     const { filters } = parseSearchParams({ country: "Japan", age_max: "" });
     expect(toHref(filters, { after: 50 })).toBe("/?country=Japan&after=50");
     expect(toHref(parseSearchParams({}).filters)).toBe("/");
