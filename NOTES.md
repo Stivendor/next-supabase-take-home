@@ -1,70 +1,70 @@
-# Notas de entrega
+# Submission notes
 
-## Cómo correrlo
+## How to run it
 
 ```bash
 pnpm install
-pnpm setup:env                # supabase start + escribe .env.local
-pnpm exec supabase db reset   # migraciones + seed (10.000 filas)
+pnpm setup:env                # supabase start + writes .env.local
+pnpm exec supabase db reset   # migrations + seed (10,000 rows)
 pnpm dev                      # http://localhost:3000
 ```
 
-## Esquema
+## Schema
 
-- Una tabla, `public.coffee_health`. `id` es el ID del CSV (PK `bigint`), no se genera.
-- Categóricas de dominio cerrado como `enum` (`gender`, `sleep_quality`, `stress_level`, `health_issues`, `occupation`): la DB valida al cargar, ocupan 4 bytes y conservan el orden semántico (Poor < Fair < Good < Excellent). Las opciones de los filtros salen de los tipos generados (`Constants` en `lib/database.types.ts`), sin duplicar valores en el código.
-- `country` como `text`: dominio abierto. La lista del filtro sale de la vista `coffee_health_countries`.
-- Decimales como `numeric(p,1)`, igual que el CSV: `bmi <= 24.5` filtra exacto, sin sorpresas de punto flotante. `Smoking` y `Alcohol_Consumption` (0/1) como `boolean`. Checks de rango en las columnas numéricas.
-- Seguridad: RLS con policy de solo lectura, más `revoke all` y `grant select` (RLS no cubre `TRUNCATE`). La vista usa `security_invoker = true`.
+- One table, `public.coffee_health`. `id` is the CSV ID (`bigint` PK), not generated.
+- Closed-domain categories are `enum`s (`gender`, `sleep_quality`, `stress_level`, `health_issues`, `occupation`): the DB validates them on load, they take 4 bytes, and they keep their semantic order (Poor < Fair < Good < Excellent). Filter options come from the generated types (`Constants` in `lib/database.types.ts`), so the values are not duplicated in code.
+- `country` is `text`: open domain. The filter's list comes from the `coffee_health_countries` view.
+- Decimals are `numeric(p,1)`, matching the CSV: `bmi <= 24.5` filters exactly, with no floating-point surprises. `Smoking` and `Alcohol_Consumption` (0/1) are `boolean`. Numeric columns have range checks.
+- Security: RLS with a read-only policy, plus `revoke all` and `grant select` (RLS does not cover `TRUNCATE`). The view uses `security_invoker = true`.
 
-## Importación
+## Import
 
-- `scripts/gen-coffee-seed.sh` (`pnpm db:seed:gen`) genera `supabase/seeds/coffee_health.sql`, que `db reset` carga después de las migraciones. Antes de generar, valida el header y que cada fila tenga 16 campos y números válidos.
-- INSERT por lotes de 1.000 filas porque el seed del CLI de Supabase no soporta `COPY ... FROM stdin`. Para millones de filas usaría `COPY` directo a Postgres y crearía los índices después de la carga.
-- Verificado contra el CSV: 10.000 filas, sumas de las columnas numéricas y conteos por categoría idénticos.
+- `scripts/gen-coffee-seed.sh` (`pnpm db:seed:gen`) generates `supabase/seeds/coffee_health.sql`, which `db reset` loads after the migrations. Before generating, it checks the header and that every row has 16 fields and valid numbers.
+- Batched INSERTs of 1,000 rows, because the Supabase CLI seed does not support `COPY ... FROM stdin`. For millions of rows I would use `COPY` straight into Postgres and create the indexes after the load.
+- Verified against the CSV: 10,000 rows, with identical sums for the numeric columns and identical counts per category.
 
-## Filtrado y paginación
+## Filtering and pagination
 
-- Todo en el servidor: Server Component → PostgREST → Postgres. El navegador recibe solo 50 filas por página.
-- Los filtros viven en la URL (`?country=Japan&country=Spain&age_min=20`): se pueden compartir, funcionan atrás/adelante y no hay estado en el cliente. `lib/coffee-health.ts` los valida y descarta lo inválido (enum desconocido, números no finitos); tiene tests.
-- Selección múltiple para categóricas (`in`), min/max para edad, café, sueño y BMI (`gte`/`lte`).
-- Paginación keyset por `id` (`after`/`before`) en vez de `OFFSET`: cada página cuesta lo mismo. Un `OFFSET 900000` lee y descarta 900.000 filas.
-- El conteo total va en su propio `<Suspense>`: la tabla se muestra sin esperarlo.
+- Everything runs on the server: Server Component → PostgREST → Postgres. The browser only receives 50 rows per page.
+- Filters live in the URL (`?country=Japan&country=Spain&age_min=20`): links can be shared, back/forward works, and there is no client state. `lib/coffee-health.ts` validates them and drops anything invalid (unknown enum values, non-finite numbers); it has tests.
+- Multi-select for categories (`in`), min/max for age, coffee, sleep and BMI (`gte`/`lte`).
+- Keyset pagination on `id` (`after`/`before`) instead of `OFFSET`: every page costs the same. An `OFFSET 900000` reads and discards 900,000 rows.
+- The total count has its own `<Suspense>` boundary: the table renders without waiting for it.
 
-## Escala (medido con 1M filas)
+## Scale (measured with 1M rows)
 
-Método: el dataset copiado ×100 (SQL al final), `EXPLAIN ANALYZE` como `anon` (el rol de PostgREST, con RLS) y tiempos HTTP contra PostgREST. Docker Desktop en Windows: los números tienen ruido, pero el orden de magnitud es fiable.
+Method: the dataset copied ×100 (SQL at the end), `EXPLAIN ANALYZE` as `anon` (PostgREST's role, with RLS), and HTTP timings against PostgREST. Docker Desktop on Windows: the numbers are noisy, but the order of magnitude is reliable.
 
-| Consulta | Tiempo |
+| Query | Time |
 | --- | --- |
-| Página 1 sin filtros | ~1 ms en DB, ~30 ms por HTTP |
-| Página tras `id` 900.000 | ~0,1 ms en DB, ~25 ms por HTTP |
-| Página filtrando un país | < 1 ms en DB |
-| Conteo exacto sin filtros | ~50–75 ms |
-| Conteo de un país | ~7 ms (sin índice: ~40–55 ms) |
-| Peor caso: combinación de filtros sin resultados | ~200–270 ms |
+| Page 1, no filters | ~1 ms in the DB, ~30 ms over HTTP |
+| Page after `id` 900,000 | ~0.1 ms in the DB, ~25 ms over HTTP |
+| Page filtered by one country | < 1 ms in the DB |
+| Exact count, no filters | ~50–75 ms |
+| Count for one country | ~7 ms (without the index: ~40–55 ms) |
+| Worst case: filter combination with no results | ~200–270 ms |
 
-Decisiones:
+Decisions:
 
-1. **Keyset**: la paginación no se degrada con el tamaño ni con la profundidad de la página.
-2. **Índices solo en `country` y `age`.** Hallazgo: con RLS activo, Postgres solo usa estadísticas con operadores *leakproof*. `texteq` e `int2ge` lo son; `enum_eq` y `numeric_ge` no. Como `anon`, `bmi >= 38` se estima en 500.000 filas (son 100) y `health_issues = 'Severe'` en 250.000 (son 1.700). Probé índices en las 10 columnas filtrables: los de enum y numeric quedaron con `idx_scan = 0` y los quité. Esto también explica por qué `count: "estimated"` erraba ~30% con rangos. Alternativas descartadas:
-   - Quitar RLS: la tabla es pública y los grants ya limitan a `SELECT`, pero va contra la práctica de Supabase para tablas expuestas.
-   - `real` en vez de `numeric`: vuelven las estadísticas, pero `bmi = 23.4` deja de coincidir (comparación float contra numeric) y la página seguía igual de lenta (punto 3).
-   - Leer con `service_role`: salta RLS, pero rompe el mínimo privilegio para una lectura pública.
-3. **Peor caso, `WHERE <filtro raro> ORDER BY id LIMIT 51`**: el planner asume que las coincidencias están repartidas y recorre el PK esperando encontrarlas pronto. Si casi no hay, lee toda la tabla (~200 ms a 1M filas, lineal con el tamaño). Pasa incluso con buenas estadísticas (probado con `real`). Red de seguridad: `statement_timeout = 3s` del rol `anon`. Si duele con datos reales: índices compuestos `(columna, id)` para los filtros que más se usen.
-4. **Conteo exacto**: costo proporcional a las filas que cumplen el filtro; ~50 ms a 1M, ~10× a 10M. No bloquea la tabla. Siguiente paso: conteo con tope ("10,000+") vía una función RPC. No usaría el estimado con filtros, por el punto 2.
-5. **Países**: la vista hace `DISTINCT` sobre toda la tabla (~80–110 ms a 1M), cacheada con `"use cache"` por horas porque solo cambia al recargar datos. Con más escala: una tabla de países.
+1. **Keyset**: pagination does not degrade with table size or page depth.
+2. **Indexes only on `country` and `age`.** Finding: with RLS enabled, Postgres only uses column statistics with *leakproof* operators. `texteq` and `int2ge` are leakproof; `enum_eq` and `numeric_ge` are not. As `anon`, `bmi >= 38` is estimated at 500,000 rows (actual: 100) and `health_issues = 'Severe'` at 250,000 (actual: 1,700). I tried indexes on all 10 filterable columns: the enum and numeric ones stayed at `idx_scan = 0`, so I removed them. This also explains why `count: "estimated"` was ~30% off with ranges. Alternatives I ruled out:
+   - Dropping RLS: the table is public and the grants already limit access to `SELECT`, but it goes against Supabase practice for exposed tables.
+   - `real` instead of `numeric`: the statistics come back, but `bmi = 23.4` stops matching (float vs. numeric comparison), and the page was just as slow (point 3).
+   - Reading with `service_role`: it bypasses RLS, but breaks least privilege for a public read.
+3. **Worst case, `WHERE <rare filter> ORDER BY id LIMIT 51`**: the planner assumes matches are spread evenly and walks the PK expecting to find them early. When there are almost none, it reads the whole table (~200 ms at 1M rows, linear in size). This happens even with good statistics (tested with `real`). Safety net: the `anon` role's `statement_timeout = 3s`. If it hurts with real data: composite `(column, id)` indexes for the most used filters.
+4. **Exact count**: cost grows with the number of matching rows; ~50 ms at 1M, ~10× at 10M. It does not block the table. Next step: a capped count ("10,000+") through an RPC function. I would not use the estimate with filters, because of point 2.
+5. **Countries**: the view runs a `DISTINCT` over the whole table (~80–110 ms at 1M) and is cached with `"use cache"` for hours, since it only changes when the data is reloaded. At larger scale: a countries table.
 
-## Supuestos y trade-offs
+## Assumptions and trade-offs
 
-- La app solo lee; los datos cambian únicamente al recargar el dataset.
-- Las copias ×100 conservan la distribución del CSV. Con datos reales las proporciones cambian y habría que volver a medir.
-- Sin ordenar por columna: solo por `id`. Ordenar por otra columna requiere keyset compuesto `(columna, id)` y un índice por cada orden permitido.
-- Los inputs vacíos dejan `age_min=` en la URL (el parser los ignora); quitarlos requeriría JS en el cliente.
-- UI en inglés, como el dataset.
-- `pnpm dev:supabase` excluye con `-x` los servicios de Supabase que no se usan (storage, realtime, edge functions, logs, correo). `vector` además falla en Docker Desktop para Windows.
+- The app only reads; the data only changes when the dataset is reloaded.
+- The ×100 copies keep the CSV's distribution. Real data would have different proportions and would need measuring again.
+- No column sorting: only by `id`. Sorting by another column needs a composite keyset `(column, id)` and one index per allowed sort.
+- Empty inputs leave `age_min=` in the URL (the parser ignores it); removing them would need client-side JS.
+- UI in English, like the dataset.
+- `pnpm dev:supabase` uses `-x` to exclude the Supabase services the app does not use (storage, realtime, edge functions, logs, email). `vector` also fails on Docker Desktop for Windows.
 
-## Reproducir con 1M filas
+## Reproducing with 1M rows
 
 ```sql
 -- psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
@@ -76,8 +76,8 @@ from public.coffee_health, generate_series(1, 99) n
 where id <= 10000;
 vacuum analyze public.coffee_health;
 
-set role anon;  -- medir como PostgREST, con RLS
+set role anon;  -- measure as PostgREST does, with RLS
 explain analyze select * from coffee_health where country in ('Japan') order by id limit 51;
 ```
 
-`pnpm exec supabase db reset` vuelve a las 10.000 filas.
+`pnpm exec supabase db reset` goes back to 10,000 rows.
