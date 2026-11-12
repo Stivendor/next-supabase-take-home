@@ -29,6 +29,7 @@ pnpm vitest run -t "nombre del test"   # un solo test por nombre
 Base de datos:
 
 ```bash
+pnpm db:seed:gen                            # regenera supabase/seeds/coffee_health.sql desde el CSV
 pnpm exec supabase migration new <nombre>   # crea supabase/migrations/<timestamp>_<nombre>.sql
 pnpm exec supabase db reset                 # recrea la DB: migraciones + seed.sql
 pnpm exec supabase migration up             # aplica migraciones pendientes sin reset
@@ -42,7 +43,7 @@ Puertos locales: API 54321, Postgres 54322 (`postgresql://postgres:postgres@127.
 ### Supabase (`supabase/`)
 
 - **Cambios de esquema solo con migraciones** en `supabase/migrations/` (regla de AGENTS.md), escritas con `supabase migration new`. `config.toml` también activa esquemas declarativos (`schema_paths = ["./schemas/*.sql"]`, con `notes.sql` de ejemplo): no usar `supabase db diff`, porque toma `supabase/schemas/` como fuente de verdad y puede generar `DROP` de tablas que solo existen en migraciones.
-- `seed.sql` se ejecuta en cada `db reset`.
+- `db reset` ejecuta `seed.sql` y luego `seeds/*.sql`. `seeds/coffee_health.sql` (10.000 filas en `public.coffee_health`) lo genera `scripts/gen-coffee-seed.sh`; no editarlo a mano. Usa INSERT por lotes porque el seed del CLI no soporta `COPY ... FROM stdin`.
 - `dev:supabase` excluye servicios con `-x` usando nombres de imagen (`storage-api`, `logflare`, `mailpit`…). Los nombres que muestra `supabase start --help` (`storage`, `analytics`, `inbucket`) se ignoran con un warning. `vector` falla en Docker Desktop para Windows (no accede al socket de Docker); `pnpm setup:env` todavía arranca todo.
 - **`[api] max_rows = 1000`**: PostgREST devuelve como máximo 1000 filas por request. Consultas con supabase-js sobre el dataset completo se truncan sin error; paginar con `.range()` y obtener totales con `count`.
 - Tablas con RLS habilitado. Una tabla nueva con RLS y sin policy devuelve 0 filas al rol `anon`.
