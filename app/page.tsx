@@ -118,9 +118,11 @@ async function getPage(filters: Filters, cursor: Cursor) {
   };
 }
 
-// Exacto: "estimated" de PostgREST erraba ~30% con rangos (planifica con parámetros y no usa
-// el histograma). Sin cursor, para que el total no cambie al paginar.
-// ponytail: costo O(filas que cumplen el filtro); si a escala es lento, contar con tope ("1,000+").
+// Exacto: "estimated" de PostgREST erraba ~30% con rangos. Con RLS, el planner no usa
+// estadísticas en operadores no leakproof (numeric, enum) y estima a ciegas. Sin cursor, para
+// que el total no cambie al paginar.
+// ponytail: seq scan paralelo, ~50 ms a 1M filas sin filtros y lineal con el tamaño. Si a ~10M
+// pesa, contar con tope vía RPC (count sobre un subquery con limit) y mostrar "10,000+".
 async function getCount(filters: Filters) {
   const { count, error } = await filteredQuery(filters, true);
   if (error) throw new Error(`coffee_health count: ${error.message}`);
