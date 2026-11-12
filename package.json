@@ -9,6 +9,7 @@
     "dev:next": "next dev",
     "dev:supabase": "supabase start -x storage-api,imgproxy,realtime,edge-runtime,logflare,vector,mailpit",
     "setup:env": "bash scripts/setup-env.sh",
+    "db:seed:gen": "bash scripts/gen-coffee-seed.sh",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
