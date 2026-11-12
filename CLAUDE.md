@@ -1,0 +1,67 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Proyecto
+
+Take-home de Medallo.dev: Next.js 16 (App Router) + Supabase local en Docker. Ejercicio (ver sección *Exercise* de `README.md`): cargar `data/synthetic_coffee_health_10000.csv` (10.000 filas, 16 columnas) en Postgres y mostrarlo en una tabla filtrable, diseñando para escalar a cientos de miles o millones de filas. La entrega incluye notas breves sobre esquema, importación, estrategia de filtrado y decisiones de escala.
+
+Reglas obligatorias del proyecto: @AGENTS.md
+
+## Comandos
+
+Usar **pnpm** (Node ≥ 24, pnpm ≥ 10). Existe también `package-lock.json`, pero el lockfile de referencia es `pnpm-lock.yaml`. Docker debe estar corriendo.
+
+```bash
+pnpm install
+pnpm setup:env          # supabase start + escribe .env.local (script bash: en Windows requiere Git Bash)
+pnpm dev                # dev:supabase + next dev en paralelo (concurrently)
+pnpm dev:next           # solo Next.js
+pnpm dev:supabase       # solo Supabase, sin storage/realtime/edge functions/logs/correo (flag -x)
+pnpm build
+pnpm lint               # eslint . (flat config: next/core-web-vitals + next/typescript)
+pnpm test               # vitest en modo watch
+pnpm test:run           # vitest una vez
+pnpm vitest run path/to/file.test.ts   # un solo archivo
+pnpm vitest run -t "nombre del test"   # un solo test por nombre
+```
+
+Base de datos:
+
+```bash
+pnpm exec supabase migration new <nombre>   # crea supabase/migrations/<timestamp>_<nombre>.sql
+pnpm exec supabase db reset                 # recrea la DB: migraciones + seed.sql
+pnpm exec supabase migration up             # aplica migraciones pendientes sin reset
+pnpm exec supabase status                   # URLs y claves locales
+```
+
+Puertos locales: API 54321, Postgres 54322 (`postgresql://postgres:postgres@127.0.0.1:54322/postgres`), Studio 54323.
+
+## Arquitectura
+
+### Supabase (`supabase/`)
+
+- **Cambios de esquema solo con migraciones** en `supabase/migrations/` (regla de AGENTS.md), escritas con `supabase migration new`. `config.toml` también activa esquemas declarativos (`schema_paths = ["./schemas/*.sql"]`, con `notes.sql` de ejemplo): no usar `supabase db diff`, porque toma `supabase/schemas/` como fuente de verdad y puede generar `DROP` de tablas que solo existen en migraciones.
+- `seed.sql` se ejecuta en cada `db reset`.
+- `dev:supabase` excluye servicios con `-x` usando nombres de imagen (`storage-api`, `logflare`, `mailpit`…). Los nombres que muestra `supabase start --help` (`storage`, `analytics`, `inbucket`) se ignoran con un warning. `vector` falla en Docker Desktop para Windows (no accede al socket de Docker); `pnpm setup:env` todavía arranca todo.
+- **`[api] max_rows = 1000`**: PostgREST devuelve como máximo 1000 filas por request. Consultas con supabase-js sobre el dataset completo se truncan sin error; paginar con `.range()` y obtener totales con `count`.
+- Tablas con RLS habilitado. Una tabla nueva con RLS y sin policy devuelve 0 filas al rol `anon`.
+
+### Clientes Supabase (`lib/supabase/`)
+
+- `client.ts`: `createBrowserClient` para Client Components (clave anon).
+- `server.ts`: `createClient()` async basado en cookies para Server Components, Server Actions y Route Handlers. `createAdminClient()` usa `SUPABASE_SECRET_KEY` y salta RLS; solo para código de servidor confiable.
+- `proxy.ts`: `updateSession()` para refrescar sesión. **No está conectado**: no existe `proxy.ts` en la raíz (Next 16 renombró `middleware.ts` a `proxy.ts`). Si se conecta tal cual, redirige toda ruta distinta de `/` sin usuario a `/auth/login`, ruta que no existe.
+- Crear un cliente nuevo por request; no guardarlo en variables globales.
+
+Variables de entorno (`.env.local`, generado por `scripts/setup-env.sh` a partir de `supabase status -o env`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (publishable key), `SUPABASE_SECRET_KEY`. El README menciona `.env.example`, pero no existe (y `.gitignore` lo ignoraría por el orden de reglas).
+
+### Next.js
+
+- `next.config.ts` activa `cacheComponents: true` (Cache Components de Next 16). Acceder a datos dinámicos (`cookies()`, `searchParams`, consultas sin caché) exige envolver el componente en `<Suspense>` o usar `"use cache"`; si no, falla el prerender.
+- `app/page.tsx` es solo una página de instrucciones; reemplazarla o agregar una ruta para la tabla.
+- UI: shadcn/ui estilo new-york (`components.json`, componentes en `components/ui/`), Tailwind CSS **v3** (`tailwind.config.ts` + `tailwindcss-animate`), iconos lucide, temas con `next-themes` (clase `dark`). Helper `cn()` en `lib/utils.ts`. Alias `@/*` = raíz del repo.
+
+### Tests
+
+Vitest con jsdom y `@vitejs/plugin-react`; incluye `**/*.{test,spec}.{ts,tsx}` con `passWithNoTests` (hoy no hay tests).
