@@ -48,6 +48,7 @@ Puertos locales: API 54321, Postgres 54322 (`postgresql://postgres:postgres@127.
 - `dev:supabase` excluye servicios con `-x` usando nombres de imagen (`storage-api`, `logflare`, `mailpit`…). Los nombres que muestra `supabase start --help` (`storage`, `analytics`, `inbucket`) se ignoran con un warning. `vector` falla en Docker Desktop para Windows (no accede al socket de Docker); `pnpm setup:env` todavía arranca todo.
 - **`[api] max_rows = 1000`**: PostgREST devuelve como máximo 1000 filas por request. Consultas con supabase-js sobre el dataset completo se truncan sin error; paginar con `.range()` y obtener totales con `count`.
 - Tablas con RLS habilitado. Una tabla nueva con RLS y sin policy devuelve 0 filas al rol `anon`.
+- **RLS y planner**: con RLS, Postgres solo usa estadísticas con operadores leakproof (`text`, enteros). En columnas `enum` y `numeric` estima con selectividad por defecto e ignora sus índices. Medir planes como `anon` (`set role anon` en psql), no como `postgres`. Por eso solo hay índices en `country` y `age`; detalle y mediciones en `NOTES.md`.
 
 ### Clientes Supabase (`lib/supabase/`)
 
@@ -61,7 +62,7 @@ Variables de entorno (`.env.local`, generado por `scripts/setup-env.sh` a partir
 ### Next.js
 
 - `next.config.ts` activa `cacheComponents: true` (Cache Components de Next 16). Acceder a datos dinámicos (`cookies()`, `searchParams`, consultas sin caché) exige envolver el componente en `<Suspense>` o usar `"use cache"`; si no, falla el prerender.
-- `app/page.tsx` (`/`): tabla filtrable de `coffee_health`. Los filtros viven en la URL y se leen/validan en `lib/coffee-health.ts` (`parseSearchParams` / `toHref`, con tests). `app/coffee-filters.tsx` es un `<Form>` GET de `next/form`. La consulta corre en el servidor: paginación keyset por `id` (`after`/`before`, 50 filas) y conteo exacto en su propio `<Suspense>`. No usar `count: "estimated"`: PostgREST planifica con parámetros y la estimación erraba ~30% con rangos. Los países salen de la vista `coffee_health_countries`, cacheada con `"use cache"`.
+- `app/page.tsx` (`/`): tabla filtrable de `coffee_health`. Los filtros viven en la URL y se leen/validan en `lib/coffee-health.ts` (`parseSearchParams` / `toHref`, con tests). `app/coffee-filters.tsx` es un `<Form>` GET de `next/form`. La consulta corre en el servidor: paginación keyset por `id` (`after`/`before`, 50 filas) y conteo exacto en su propio `<Suspense>`. No usar `count: "estimated"`: erraba ~30% con rangos (ver nota de RLS y leakproof abajo). Los países salen de la vista `coffee_health_countries`, cacheada con `"use cache"`.
 - UI: shadcn/ui estilo new-york (`components.json`, componentes en `components/ui/`), Tailwind CSS **v3** (`tailwind.config.ts` + `tailwindcss-animate`), iconos lucide, temas con `next-themes` (clase `dark`). Helper `cn()` en `lib/utils.ts`. Alias `@/*` = raíz del repo.
 
 ### Tests
