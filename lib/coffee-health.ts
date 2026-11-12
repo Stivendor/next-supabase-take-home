@@ -5,8 +5,8 @@ export type CoffeeHealthRow = Database["public"]["Tables"]["coffee_health"]["Row
 
 export const PAGE_SIZE = 50;
 
-// Selección múltiple sobre columnas enum: las opciones salen de los tipos generados
-// (pnpm db:types), así no se duplican los valores del esquema.
+// Multi-select over enum columns: options come from the generated types
+// (pnpm db:types), so the schema values are not duplicated.
 export const ENUM_FILTERS = {
   gender: { label: "Gender", options: Constants.public.Enums.gender },
   sleep_quality: { label: "Sleep quality", options: Constants.public.Enums.sleep_quality },
@@ -17,7 +17,7 @@ export const ENUM_FILTERS = {
 export type EnumFilterKey = keyof typeof ENUM_FILTERS;
 export const ENUM_FILTER_KEYS = Object.keys(ENUM_FILTERS) as EnumFilterKey[];
 
-// Rangos min/max; en la URL van como <columna>_min y <columna>_max.
+// Min/max ranges; in the URL they are <column>_min and <column>_max.
 export const RANGE_FILTERS = {
   age: { label: "Age", step: 1 },
   coffee_intake: { label: "Coffee (cups/day)", step: 0.1 },
@@ -33,7 +33,7 @@ export type Filters = { country: string[] } & { [K in EnumFilterKey]: Enums[K][]
   [K in RangeFilterKey]: Range;
 };
 
-// Paginación por keyset sobre id: `after` = página siguiente, `before` = anterior.
+// Keyset pagination on id: `after` = next page, `before` = previous page.
 export type Cursor = { after: number } | { before: number } | null;
 
 export type SearchParams = Record<string, string | string[] | undefined>;
@@ -50,7 +50,7 @@ const toId = (v: string | undefined) => {
   return Number.isSafeInteger(n) && n > 0 ? n : undefined;
 };
 
-/** Lee y valida los filtros de la URL. Lo inválido se descarta en silencio. */
+/** Reads and validates the filters from the URL. Invalid values are silently dropped. */
 export function parseSearchParams(sp: SearchParams): { filters: Filters; cursor: Cursor } {
   const enumFilters = Object.fromEntries(
     ENUM_FILTER_KEYS.map((key) => {
@@ -70,13 +70,13 @@ export function parseSearchParams(sp: SearchParams): { filters: Filters; cursor:
   const before = toId(values(sp, "before")[0]);
 
   return {
-    // country es text (dominio abierto): se pasa tal cual; PostgREST lo parametriza.
+    // country is text (open domain): passed through as is; PostgREST parameterizes it.
     filters: { country: values(sp, "country"), ...enumFilters, ...rangeFilters },
     cursor: after ? { after } : before ? { before } : null,
   };
 }
 
-/** Inversa de parseSearchParams: URL canónica para links de paginación y "limpiar". */
+/** Inverse of parseSearchParams: canonical URL for pagination and "clear" links. */
 export function toSearchParams(filters: Filters, cursor: Cursor = null): URLSearchParams {
   const params = new URLSearchParams();
   for (const v of filters.country) params.append("country", v);
@@ -91,7 +91,7 @@ export function toSearchParams(filters: Filters, cursor: Cursor = null): URLSear
   return params;
 }
 
-/** Href de la página con esos filtros; "/" si no hay ninguno. */
+/** Href of the page with these filters; "/" when there are none. */
 export function toHref(filters: Filters, cursor: Cursor = null): string {
   const qs = toSearchParams(filters, cursor).toString();
   return qs ? `/?${qs}` : "/";

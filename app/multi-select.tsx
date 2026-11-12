@@ -12,9 +12,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 /**
- * Selección múltiple con el patrón "menu button" de WAI-ARIA (Radix): se cierra con clic
- * fuera o Escape, devuelve el foco al botón, navega con flechas y busca al teclear.
- * Los valores elegidos viajan en inputs hidden para que el <form> GET los envíe.
+ * Multi-select using the WAI-ARIA "menu button" pattern (Radix): closes on outside click
+ * or Escape, returns focus to the button, navigates with arrow keys and supports typeahead.
+ * Selected values travel in hidden inputs so the GET <form> submits them.
  */
 export function MultiSelect({
   name,
@@ -29,7 +29,7 @@ export function MultiSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<readonly string[]>(defaultSelected);
-  // En el orden de las opciones, para que la URL sea estable.
+  // In option order, so the URL is stable.
   const values = options.filter((option) => selected.includes(option));
   const summary =
     values.length === 0 ? "Any" : values.length === 1 ? values[0] : `${values.length} selected`;
@@ -39,7 +39,7 @@ export function MultiSelect({
       {values.map((value) => (
         <input key={value} type="hidden" name={name} value={value} />
       ))}
-      {/* modal={false}: el clic fuera cierra la lista y además llega a su destino (p. ej. otro filtro). */}
+      {/* modal={false}: an outside click closes the list and still reaches its target (e.g. another filter). */}
       <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" className="w-full justify-between gap-2 px-3 font-normal">
@@ -53,7 +53,7 @@ export function MultiSelect({
         <DropdownMenuContent
           align="start"
           className="max-h-72 w-[var(--radix-dropdown-menu-trigger-width)]"
-          // Radix bloquea Tab dentro del menú; WAI-ARIA pide que Tab lo cierre. El foco vuelve al botón.
+          // Radix blocks Tab inside the menu; WAI-ARIA says Tab should close it. Focus returns to the button.
           onKeyDown={(event) => event.key === "Tab" && setOpen(false)}
         >
           {options.map((option) => (
@@ -63,7 +63,7 @@ export function MultiSelect({
               onCheckedChange={(checked) =>
                 setSelected((prev) => (checked ? [...prev, option] : prev.filter((v) => v !== option)))
               }
-              // Mantiene la lista abierta para marcar varias opciones seguidas.
+              // Keeps the list open so several options can be checked in a row.
               onSelect={(event) => event.preventDefault()}
             >
               {option}

@@ -37,7 +37,7 @@ export default function Home({ searchParams }: { searchParams: Promise<SearchPar
             Synthetic dataset of coffee consumption and health indicators.
           </p>
         </header>
-        {/* searchParams es dato de request: con cacheComponents debe leerse dentro de Suspense. */}
+        {/* searchParams is request data: with cacheComponents it must be read inside Suspense. */}
         <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
           <CoffeeHealth searchParams={searchParams} />
         </Suspense>
@@ -48,16 +48,16 @@ export default function Home({ searchParams }: { searchParams: Promise<SearchPar
 
 async function CoffeeHealth({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const { filters, cursor } = parseSearchParams(await searchParams);
-  // El conteo no se espera aquí: llega por streaming en su propio Suspense y no frena la tabla.
+  // The count is not awaited here: it streams in its own Suspense and does not hold up the table.
   const count = getCount(filters);
   const [countries, page] = await Promise.all([getCountries(), getPage(filters, cursor)]);
 
   return (
     <>
-      {/* key: remonta el formulario al cambiar filtros para resetear inputs no controlados. */}
+      {/* key: remounts the form when filters change, to reset uncontrolled inputs. */}
       <CoffeeFilters key={toSearchParams(filters).toString()} filters={filters} countries={countries} />
       <div className="flex items-center justify-between gap-4">
-        {/* La región aria-live queda fuera del Suspense: persiste y se anuncia cada cambio del total. */}
+        {/* The aria-live region sits outside the Suspense: it persists, so every change to the total is announced. */}
         <div aria-live="polite">
           <Suspense fallback={<p className="text-sm text-muted-foreground">Counting…</p>}>
             <ResultCount count={count} />
@@ -72,14 +72,14 @@ async function CoffeeHealth({ searchParams }: { searchParams: Promise<SearchPara
 
 async function getCountries() {
   "use cache";
-  // Cambia solo al recargar el dataset: evita un DISTINCT sobre toda la tabla por request.
+  // Only changes when the dataset is reloaded: avoids a DISTINCT over the whole table per request.
   cacheLife("hours");
   const { data, error } = await createPublicClient().from("coffee_health_countries").select("country");
   if (error) throw new Error(`coffee_health_countries: ${error.message}`);
   return data.flatMap((row) => (row.country ? [row.country] : []));
 }
 
-/** Misma consulta filtrada para filas y conteo (head = solo conteo, sin traer filas). */
+/** Same filtered query for rows and count (head = count only, no rows fetched). */
 function filteredQuery(filters: Filters, head: boolean) {
   let query = createPublicClient()
     .from("coffee_health")
@@ -97,8 +97,8 @@ function filteredQuery(filters: Filters, head: boolean) {
 }
 
 async function getPage(filters: Filters, cursor: Cursor) {
-  // Keyset sobre id: costo constante en cualquier página, a diferencia de OFFSET.
-  // Se pide una fila extra para saber si hay más.
+  // Keyset on id: constant cost on any page, unlike OFFSET.
+  // One extra row is fetched to know whether there are more.
   const backward = cursor !== null && "before" in cursor;
   let query = filteredQuery(filters, false);
   if (cursor && "after" in cursor) query = query.gt("id", cursor.after);
@@ -118,11 +118,11 @@ async function getPage(filters: Filters, cursor: Cursor) {
   };
 }
 
-// Exacto: "estimated" de PostgREST erraba ~30% con rangos. Con RLS, el planner no usa
-// estadísticas en operadores no leakproof (numeric, enum) y estima a ciegas. Sin cursor, para
-// que el total no cambie al paginar.
-// ponytail: seq scan paralelo, ~50 ms a 1M filas sin filtros y lineal con el tamaño. Si a ~10M
-// pesa, contar con tope vía RPC (count sobre un subquery con limit) y mostrar "10,000+".
+// Exact: PostgREST's "estimated" was ~30% off with ranges. With RLS, the planner ignores
+// statistics for non-leakproof operators (numeric, enum) and estimates blindly. No cursor, so
+// the total stays the same while paging.
+// ponytail: parallel seq scan, ~50 ms at 1M rows without filters and linear in size. If it
+// hurts at ~10M, use a capped count via RPC (count over a subquery with limit) and show "10,000+".
 async function getCount(filters: Filters) {
   const { count, error } = await filteredQuery(filters, true);
   if (error) throw new Error(`coffee_health count: ${error.message}`);
@@ -174,8 +174,8 @@ function PageLink({ href, children }: { href: string | null; children: React.Rea
   );
 }
 
-// decimal: columnas numeric(p,1). PostgREST las devuelve como número JSON (1.0 llega como 1),
-// así que se formatean con un decimal fijo.
+// decimal: numeric(p,1) columns. PostgREST returns them as JSON numbers (1.0 arrives as 1),
+// so they are formatted with one fixed decimal.
 const COLUMNS: { key: keyof CoffeeHealthRow; label: string; numeric?: boolean; decimal?: boolean }[] = [
   { key: "id", label: "ID", numeric: true },
   { key: "age", label: "Age", numeric: true },
