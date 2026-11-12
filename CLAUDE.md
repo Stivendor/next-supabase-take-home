@@ -2,69 +2,69 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Proyecto
+## Project
 
-Take-home de Medallo.dev: Next.js 16 (App Router) + Supabase local en Docker. Ejercicio (ver sección *Exercise* de `README.md`): cargar `data/synthetic_coffee_health_10000.csv` (10.000 filas, 16 columnas) en Postgres y mostrarlo en una tabla filtrable, diseñando para escalar a cientos de miles o millones de filas. La entrega incluye notas breves sobre esquema, importación, estrategia de filtrado y decisiones de escala.
+Medallo.dev take-home: Next.js 16 (App Router) + local Supabase in Docker. Exercise (see the *Exercise* section of `README.md`): load `data/synthetic_coffee_health_10000.csv` (10,000 rows, 16 columns) into Postgres and show it in a filterable table, designed to scale to hundreds of thousands or millions of rows. The submission includes brief notes on schema, import, filtering strategy and scale decisions (`NOTES.md`).
 
-Reglas obligatorias del proyecto: @AGENTS.md
+Mandatory project rules: @AGENTS.md
 
-## Comandos
+## Commands
 
-Usar **pnpm** (Node ≥ 24, pnpm ≥ 10). Existe también `package-lock.json`, pero el lockfile de referencia es `pnpm-lock.yaml`. Docker debe estar corriendo.
+Use **pnpm** (Node ≥ 24, pnpm ≥ 10). There is also a `package-lock.json`, but the reference lockfile is `pnpm-lock.yaml`. Docker must be running.
 
 ```bash
 pnpm install
-pnpm setup:env          # supabase start + escribe .env.local (script bash: en Windows requiere Git Bash)
-pnpm dev                # dev:supabase + next dev en paralelo (concurrently)
-pnpm dev:next           # solo Next.js
-pnpm dev:supabase       # solo Supabase, sin storage/realtime/edge functions/logs/correo (flag -x)
+pnpm setup:env          # supabase start + writes .env.local (bash script: on Windows needs Git Bash)
+pnpm dev                # dev:supabase + next dev in parallel (concurrently)
+pnpm dev:next           # Next.js only
+pnpm dev:supabase       # Supabase only, without storage/realtime/edge functions/logs/email (-x flag)
 pnpm build
 pnpm lint               # eslint . (flat config: next/core-web-vitals + next/typescript)
-pnpm test               # vitest en modo watch
-pnpm test:run           # vitest una vez
-pnpm vitest run path/to/file.test.ts   # un solo archivo
-pnpm vitest run -t "nombre del test"   # un solo test por nombre
+pnpm test               # vitest in watch mode
+pnpm test:run           # vitest once
+pnpm vitest run path/to/file.test.ts   # a single file
+pnpm vitest run -t "test name"         # a single test by name
 ```
 
-Base de datos:
+Database:
 
 ```bash
-pnpm db:seed:gen                            # regenera supabase/seeds/coffee_health.sql desde el CSV
-pnpm db:types                               # regenera lib/database.types.ts (correr tras cada migración)
-pnpm exec supabase migration new <nombre>   # crea supabase/migrations/<timestamp>_<nombre>.sql
-pnpm exec supabase db reset                 # recrea la DB: migraciones + seed.sql
-pnpm exec supabase migration up             # aplica migraciones pendientes sin reset
-pnpm exec supabase status                   # URLs y claves locales
+pnpm db:seed:gen                          # regenerates supabase/seeds/coffee_health.sql from the CSV
+pnpm db:types                             # regenerates lib/database.types.ts (run after every migration)
+pnpm exec supabase migration new <name>   # creates supabase/migrations/<timestamp>_<name>.sql
+pnpm exec supabase db reset               # recreates the DB: migrations + seed.sql
+pnpm exec supabase migration up           # applies pending migrations without a reset
+pnpm exec supabase status                 # local URLs and keys
 ```
 
-Puertos locales: API 54321, Postgres 54322 (`postgresql://postgres:postgres@127.0.0.1:54322/postgres`), Studio 54323.
+Local ports: API 54321, Postgres 54322 (`postgresql://postgres:postgres@127.0.0.1:54322/postgres`), Studio 54323.
 
-## Arquitectura
+## Architecture
 
 ### Supabase (`supabase/`)
 
-- **Cambios de esquema solo con migraciones** en `supabase/migrations/` (regla de AGENTS.md), escritas con `supabase migration new`. `config.toml` también activa esquemas declarativos (`schema_paths = ["./schemas/*.sql"]`, con `notes.sql` de ejemplo): no usar `supabase db diff`, porque toma `supabase/schemas/` como fuente de verdad y puede generar `DROP` de tablas que solo existen en migraciones.
-- `db reset` ejecuta `seed.sql` y luego `seeds/*.sql`. `seeds/coffee_health.sql` (10.000 filas en `public.coffee_health`) lo genera `scripts/gen-coffee-seed.sh`; no editarlo a mano. Usa INSERT por lotes porque el seed del CLI no soporta `COPY ... FROM stdin`.
-- `dev:supabase` excluye servicios con `-x` usando nombres de imagen (`storage-api`, `logflare`, `mailpit`…). Los nombres que muestra `supabase start --help` (`storage`, `analytics`, `inbucket`) se ignoran con un warning. `vector` falla en Docker Desktop para Windows (no accede al socket de Docker); `pnpm setup:env` todavía arranca todo.
-- **`[api] max_rows = 1000`**: PostgREST devuelve como máximo 1000 filas por request. Consultas con supabase-js sobre el dataset completo se truncan sin error; paginar con `.range()` y obtener totales con `count`.
-- Tablas con RLS habilitado. Una tabla nueva con RLS y sin policy devuelve 0 filas al rol `anon`.
-- **RLS y planner**: con RLS, Postgres solo usa estadísticas con operadores leakproof (`text`, enteros). En columnas `enum` y `numeric` estima con selectividad por defecto e ignora sus índices. Medir planes como `anon` (`set role anon` en psql), no como `postgres`. Por eso solo hay índices en `country` y `age`; detalle y mediciones en `NOTES.md`.
+- **Schema changes only through migrations** in `supabase/migrations/` (AGENTS.md rule), created with `supabase migration new`. `config.toml` also enables declarative schemas (`schema_paths = ["./schemas/*.sql"]`, with a sample `notes.sql`): do not use `supabase db diff`, because it treats `supabase/schemas/` as the source of truth and can generate `DROP`s for tables that only exist in migrations.
+- `db reset` runs `seed.sql` and then `seeds/*.sql`. `seeds/coffee_health.sql` (10,000 rows in `public.coffee_health`) is generated by `scripts/gen-coffee-seed.sh`; do not edit it by hand. It uses batched INSERTs because the CLI seed does not support `COPY ... FROM stdin`.
+- `dev:supabase` excludes services with `-x` using image names (`storage-api`, `logflare`, `mailpit`…). The names shown by `supabase start --help` (`storage`, `analytics`, `inbucket`) are ignored with a warning. `vector` fails on Docker Desktop for Windows (it cannot reach the Docker socket); `pnpm setup:env` still starts everything.
+- **`[api] max_rows = 1000`**: PostgREST returns at most 1000 rows per request. supabase-js queries over the full dataset are truncated without an error; paginate with `.range()` and get totals with `count`.
+- Tables have RLS enabled. A new table with RLS and no policy returns 0 rows to the `anon` role.
+- **RLS and the planner**: with RLS, Postgres only uses statistics with leakproof operators (`text`, integers). On `enum` and `numeric` columns it estimates with default selectivity and ignores their indexes. Measure plans as `anon` (`set role anon` in psql), not as `postgres`. That is why there are indexes only on `country` and `age`; details and measurements in `NOTES.md`.
 
-### Clientes Supabase (`lib/supabase/`)
+### Supabase clients (`lib/supabase/`)
 
-- `client.ts`: `createBrowserClient` para Client Components (clave anon).
-- `server.ts`: `createClient()` async basado en cookies para Server Components, Server Actions y Route Handlers. `createPublicClient()` (tipado con `Database`, clave anon, sin cookies) para datos públicos; es el único usable dentro de `"use cache"`. `createAdminClient()` usa `SUPABASE_SECRET_KEY` y salta RLS; solo para código de servidor confiable.
-- `proxy.ts`: `updateSession()` para refrescar sesión. **No está conectado**: no existe `proxy.ts` en la raíz (Next 16 renombró `middleware.ts` a `proxy.ts`). Si se conecta tal cual, redirige toda ruta distinta de `/` sin usuario a `/auth/login`, ruta que no existe.
-- Crear un cliente nuevo por request; no guardarlo en variables globales.
+- `client.ts`: `createBrowserClient` for Client Components (anon key).
+- `server.ts`: async cookie-based `createClient()` for Server Components, Server Actions and Route Handlers. `createPublicClient()` (typed with `Database`, anon key, no cookies) for public data; it is the only one usable inside `"use cache"`. `createAdminClient()` uses `SUPABASE_SECRET_KEY` and bypasses RLS; trusted server code only.
+- `proxy.ts`: `updateSession()` to refresh the session. **Not wired up**: there is no `proxy.ts` at the root (Next 16 renamed `middleware.ts` to `proxy.ts`). If wired up as is, it redirects every route other than `/` without a user to `/auth/login`, a route that does not exist.
+- Create a new client per request; do not keep it in global variables.
 
-Variables de entorno (`.env.local`, generado por `scripts/setup-env.sh` a partir de `supabase status -o env`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (publishable key), `SUPABASE_SECRET_KEY`. El README menciona `.env.example`, pero no existe (y `.gitignore` lo ignoraría por el orden de reglas).
+Environment variables (`.env.local`, generated by `scripts/setup-env.sh` from `supabase status -o env`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (publishable key), `SUPABASE_SECRET_KEY`. The README mentions `.env.example`, but it does not exist (and `.gitignore` would ignore it because of the rule order).
 
 ### Next.js
 
-- `next.config.ts` activa `cacheComponents: true` (Cache Components de Next 16). Acceder a datos dinámicos (`cookies()`, `searchParams`, consultas sin caché) exige envolver el componente en `<Suspense>` o usar `"use cache"`; si no, falla el prerender.
-- `app/page.tsx` (`/`): tabla filtrable de `coffee_health`. Los filtros viven en la URL y se leen/validan en `lib/coffee-health.ts` (`parseSearchParams` / `toHref`, con tests). `app/coffee-filters.tsx` es un `<Form>` GET de `next/form`. La consulta corre en el servidor: paginación keyset por `id` (`after`/`before`, 50 filas) y conteo exacto en su propio `<Suspense>`. No usar `count: "estimated"`: erraba ~30% con rangos (ver nota de RLS y leakproof abajo). Los países salen de la vista `coffee_health_countries`, cacheada con `"use cache"`.
-- UI: shadcn/ui estilo new-york (`components.json`, componentes en `components/ui/`), Tailwind CSS **v3** (`tailwind.config.ts` + `tailwindcss-animate`), iconos lucide, temas con `next-themes` (clase `dark`). Helper `cn()` en `lib/utils.ts`. Alias `@/*` = raíz del repo.
+- `next.config.ts` enables `cacheComponents: true` (Next 16 Cache Components). Accessing dynamic data (`cookies()`, `searchParams`, uncached queries) requires wrapping the component in `<Suspense>` or using `"use cache"`; otherwise the prerender fails.
+- `app/page.tsx` (`/`): filterable `coffee_health` table. Filters live in the URL and are read/validated in `lib/coffee-health.ts` (`parseSearchParams` / `toHref`, with tests). `app/coffee-filters.tsx` is a GET `<Form>` from `next/form`. The query runs on the server: keyset pagination on `id` (`after`/`before`, 50 rows) and an exact count in its own `<Suspense>`. Do not use `count: "estimated"`: it was ~30% off with ranges (see the RLS and leakproof note above). Countries come from the `coffee_health_countries` view, cached with `"use cache"`.
+- UI: shadcn/ui new-york style (`components.json`, components in `components/ui/`), Tailwind CSS **v3** (`tailwind.config.ts` + `tailwindcss-animate`), lucide icons, themes with `next-themes` (`dark` class). `cn()` helper in `lib/utils.ts`. Alias `@/*` = repo root.
 
 ### Tests
 
-Vitest con jsdom y `@vitejs/plugin-react`; incluye `**/*.{test,spec}.{ts,tsx}` con `passWithNoTests`. Tests actuales: `lib/coffee-health.test.ts`.
+Vitest with jsdom and `@vitejs/plugin-react`; includes `**/*.{test,spec}.{ts,tsx}` with `passWithNoTests`. Current tests: `lib/coffee-health.test.ts`.
