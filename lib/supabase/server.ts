@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import type { Database } from "@/lib/database.types";
 
 /**
  * Especially important if using Fluid compute: Don't put this client in a
@@ -29,6 +30,23 @@ export async function createClient() {
             // user sessions.
           }
         },
+      },
+    },
+  );
+}
+
+/**
+ * Cliente con la clave anon y sin cookies, para datos públicos (RLS de lectura
+ * pública). No lee la request, así que se puede usar dentro de `"use cache"`.
+ */
+export function createPublicClient() {
+  return createSupabaseClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
       },
     },
   );
