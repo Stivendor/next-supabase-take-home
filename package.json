@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "concurrently -n supabase,next -c cyan,magenta \"pnpm dev:supabase\" \"pnpm dev:next\"",
     "dev:next": "next dev",
-    "dev:supabase": "supabase start",
+    "dev:supabase": "supabase start -x storage-api,imgproxy,realtime,edge-runtime,logflare,vector,mailpit",
     "setup:env": "bash scripts/setup-env.sh",
     "build": "next build",
     "start": "next start",

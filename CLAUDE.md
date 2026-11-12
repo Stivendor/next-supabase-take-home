@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Take-home de Medallo.dev: Next.js 16 (App Router) + Supabase local en Docker. Ejercicio (ver sección *Exercise* de `README.md`): cargar `data/synthetic_coffee_health_10000.csv` (10.000 filas, 16 columnas) en Postgres y mostrarlo en una tabla filtrable, diseñando para escalar a cientos de miles o millones de filas. La entrega incluye notas breves sobre esquema, importación, estrategia de filtrado y decisiones de escala.
 
+Reglas obligatorias del proyecto: @AGENTS.md
+
 ## Comandos
 
 Usar **pnpm** (Node ≥ 24, pnpm ≥ 10). Existe también `package-lock.json`, pero el lockfile de referencia es `pnpm-lock.yaml`. Docker debe estar corriendo.
@@ -13,9 +15,9 @@ Usar **pnpm** (Node ≥ 24, pnpm ≥ 10). Existe también `package-lock.json`, p
 ```bash
 pnpm install
 pnpm setup:env          # supabase start + escribe .env.local (script bash: en Windows requiere Git Bash)
-pnpm dev                # supabase start + next dev en paralelo (concurrently)
+pnpm dev                # dev:supabase + next dev en paralelo (concurrently)
 pnpm dev:next           # solo Next.js
-pnpm dev:supabase       # solo Supabase
+pnpm dev:supabase       # solo Supabase, sin storage/realtime/edge functions/logs/correo (flag -x)
 pnpm build
 pnpm lint               # eslint . (flat config: next/core-web-vitals + next/typescript)
 pnpm test               # vitest en modo watch
@@ -27,20 +29,21 @@ pnpm vitest run -t "nombre del test"   # un solo test por nombre
 Base de datos:
 
 ```bash
-pnpm exec supabase db reset              # recrea la DB: migraciones + seed.sql
-pnpm exec supabase db diff -f <nombre>   # genera migración desde supabase/schemas/
-pnpm exec supabase migration up          # aplica migraciones pendientes sin reset
-pnpm exec supabase status                # URLs y claves locales
+pnpm exec supabase migration new <nombre>   # crea supabase/migrations/<timestamp>_<nombre>.sql
+pnpm exec supabase db reset                 # recrea la DB: migraciones + seed.sql
+pnpm exec supabase migration up             # aplica migraciones pendientes sin reset
+pnpm exec supabase status                   # URLs y claves locales
 ```
 
-Puertos locales: API 54321, Postgres 54322, Studio 54323, Inbucket 54324.
+Puertos locales: API 54321, Postgres 54322 (`postgresql://postgres:postgres@127.0.0.1:54322/postgres`), Studio 54323.
 
 ## Arquitectura
 
 ### Supabase (`supabase/`)
 
-- **Esquemas declarativos**: `config.toml` define `schema_paths = ["./schemas/*.sql"]`. Fuente de verdad = `supabase/schemas/*.sql`; las migraciones de `supabase/migrations/` se generan con `supabase db diff`. Mantener ambos sincronizados (el ejemplo `notes` tiene los dos).
+- **Cambios de esquema solo con migraciones** en `supabase/migrations/` (regla de AGENTS.md), escritas con `supabase migration new`. `config.toml` también activa esquemas declarativos (`schema_paths = ["./schemas/*.sql"]`, con `notes.sql` de ejemplo): no usar `supabase db diff`, porque toma `supabase/schemas/` como fuente de verdad y puede generar `DROP` de tablas que solo existen en migraciones.
 - `seed.sql` se ejecuta en cada `db reset`.
+- `dev:supabase` excluye servicios con `-x` usando nombres de imagen (`storage-api`, `logflare`, `mailpit`…). Los nombres que muestra `supabase start --help` (`storage`, `analytics`, `inbucket`) se ignoran con un warning. `vector` falla en Docker Desktop para Windows (no accede al socket de Docker); `pnpm setup:env` todavía arranca todo.
 - **`[api] max_rows = 1000`**: PostgREST devuelve como máximo 1000 filas por request. Consultas con supabase-js sobre el dataset completo se truncan sin error; paginar con `.range()` y obtener totales con `count`.
 - Tablas con RLS habilitado. Una tabla nueva con RLS y sin policy devuelve 0 filas al rol `anon`.
 
