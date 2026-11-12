@@ -50,6 +50,9 @@ async function CoffeeHealth({ searchParams }: { searchParams: Promise<SearchPara
   const { filters, cursor } = parseSearchParams(await searchParams);
   // The count is not awaited here: it streams in its own Suspense and does not hold up the table.
   const count = getCount(filters);
+  // ponytail: in dev, Next abandons the first render on a "use cache" miss and this promise is never
+  // awaited (unhandledRejection). Marks it as handled; ResultCount still awaits it and gets the error.
+  count.catch(() => {});
   const [countries, page] = await Promise.all([getCountries(), getPage(filters, cursor)]);
 
   return (
