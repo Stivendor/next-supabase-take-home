@@ -10,6 +10,7 @@
     "dev:supabase": "supabase start -x storage-api,imgproxy,realtime,edge-runtime,logflare,vector,mailpit",
     "setup:env": "bash scripts/setup-env.sh",
     "db:seed:gen": "bash scripts/gen-coffee-seed.sh",
+    "db:types": "supabase gen types --local --lang typescript --schema public > lib/database.types.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
