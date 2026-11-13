@@ -1,9 +1,9 @@
-# Reglas del proyecto
-- Stack: Next.js (App Router, Server Components), Supabase local (Docker), pnpm, Vitest.
-- Filtrado y paginación SIEMPRE en el servidor (Postgres). Nunca traer todas las filas al cliente.
-- Filtros viven en la URL (searchParams).
-- Usar componentes de components/ui/ antes de crear nuevos.
-- Cambios de esquema solo vía migraciones en supabase/migrations/.
-- Nunca commitear .env.local ni secretos.
-- Cambios pequeños y explicados; antes de editar, explica qué vas a hacer y por qué.
-- No instalar librerías nuevas sin preguntar.
+# Project rules
+- Stack: Next.js (App Router, Server Components), local Supabase (Docker), pnpm, Vitest.
+- Filtering and pagination ALWAYS on the server (Postgres). Never fetch all rows to the client.
+- Filters live in the URL (searchParams).
+- Use components from components/ui/ before creating new ones.
+- Schema changes only through migrations in supabase/migrations/.
+- Never commit .env.local or secrets.
+- Small, explained changes; before editing, explain what you will do and why.
+- Do not install new libraries without asking.
